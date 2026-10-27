@@ -1,0 +1,35 @@
+name: Activity graph
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: activity
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pip install --quiet fonttools
+      - run: node scripts/build.mjs activity
+        env:
+          GITHUB_TOKEN: ${{ secrets.PROFILE_TOKEN || secrets.GITHUB_TOKEN }}
+      - run: |
+          git diff --quiet -- assets && exit 0
+          old=$(git rev-parse HEAD)
+          msg=$(git log -1 --format=%B)
+          git config user.name "$(git log -1 --format=%an)"
+          git config user.email "$(git log -1 --format=%ae)"
+          export GIT_AUTHOR_DATE=$(git log -1 --format=%aI) GIT_COMMITTER_DATE=$(git log -1 --format=%cI)
+          git checkout -q --orphan squashed
+          git add -A
+          git commit -q -m "$msg"
+          git push --force-with-lease=main:$old origin HEAD:main
